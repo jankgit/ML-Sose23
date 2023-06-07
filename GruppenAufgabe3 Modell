@@ -1,0 +1,395 @@
+{
+ "cells": [
+  {
+   "cell_type": "markdown",
+   "id": "c1681b4d-4596-4366-ae6a-9293ce83c47f",
+   "metadata": {},
+   "source": [
+    "# Gruppen-Aufgabe 3 Modell"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 70,
+   "id": "7ae1ab21-315d-43a2-8fbc-f2a094c5fea0",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "import numpy as np\n",
+    "import pandas as pd\n",
+    "import seaborn as sns\n",
+    "import matplotlib.pyplot as plt\n",
+    "import csv\n",
+    "import warnings\n",
+    "from sklearn.decomposition import PCA\n",
+    "from sklearn.linear_model import LogisticRegression\n",
+    "from sklearn.model_selection import train_test_split\n",
+    "from sklearn.metrics import accuracy_score\n",
+    "from sklearn.preprocessing import LabelEncoder\n",
+    "from sklearn.model_selection import cross_val_score\n",
+    "import matplotlib.pyplot as plt"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 71,
+   "id": "15f17984-cb26-4413-94ca-54a651677dbb",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Datensatz laden und irrelevanten Merkmale „Over 18“,„EmployeeCount“ und „StandardHours“ entfernen\n",
+    "df = pd.read_csv('Employee Attrition and Factors.csv', sep=\";\")\n",
+    "df = df.drop([\"Over18\", \"EmployeeCount\", \"StandardHours\"], axis=1)\n",
+    "\n",
+    "# Bereinigung der Ausreißer durch Capping aus GruppenAufgabe 2\n",
+    "num_columns = df.shape[1]\n",
+    "for spaltenNummer in range(num_columns):\n",
+    "    spalte = df.iloc[:, spaltenNummer].copy()\n",
+    "    try:\n",
+    "        percentile25 = spalte.quantile(0.25)\n",
+    "        percentile75 = spalte.quantile(0.75)\n",
+    "        iqr = percentile75 - percentile25\n",
+    "        upper_limit = percentile75 + 1.5 * iqr\n",
+    "        lower_limit = percentile25 - 1.5 * iqr\n",
+    "\n",
+    "        spalte[(spalte > upper_limit)] = upper_limit\n",
+    "        spalte[(spalte < lower_limit)] = lower_limit\n",
+    "\n",
+    "        df.iloc[:, spaltenNummer] = spalte\n",
+    "\n",
+    "    except (TypeError, ValueError):\n",
+    "        continue\n",
+    "\n",
+    "# Umkodierung in nummerische Werte (hier werden abweichend zu Aufg2 die nicht nummerischen Spalten überschrieben)\n",
+    "for spaltenNummer in range(num_columns):\n",
+    "    spalte = df.iloc[:, spaltenNummer]\n",
+    "    le = LabelEncoder()    \n",
+    "    le_result = le.fit_transform(spalte)\n",
+    "    df.iloc[:, spaltenNummer] = le_result"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "6547b591-1ef4-4098-874b-a53030a78414",
+   "metadata": {},
+   "source": [
+    "Logistische Regression (ohne Regularisierung)\n",
+    "und Ergebnisse über die Kreuzvalidierung absichern."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 76,
+   "id": "8f642674-170f-4ade-a69c-9aa7247afe1d",
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "[0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0\n",
+      " 1 1 0 0 0 0 0 1 0 1 0 0 1 0 0 0 0 0 0 1 0 0 0 0 1 0 0 1 1 0 0 0 0 0 0 0 0\n",
+      " 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1\n",
+      " 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 0 0 0 0 0 0 1\n",
+      " 0 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 0 0 0 0 0 0 0 0 0 0 0 0\n",
+      " 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0\n",
+      " 0 1 0 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 0 0 1 0 0 0 0 0 0 0 0 0 0 0 0 0\n",
+      " 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 1 0 0 0 0 0 0 0 0 0 0 0]\n",
+      "Genauigkeit des Modells: 0.8843537414965986\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "/home/a/anaconda3/lib/python3.9/site-packages/sklearn/linear_model/_logistic.py:814: ConvergenceWarning: lbfgs failed to converge (status=1):\n",
+      "STOP: TOTAL NO. of ITERATIONS REACHED LIMIT.\n",
+      "\n",
+      "Increase the number of iterations (max_iter) or scale the data as shown in:\n",
+      "    https://scikit-learn.org/stable/modules/preprocessing.html\n",
+      "Please also refer to the documentation for alternative solver options:\n",
+      "    https://scikit-learn.org/stable/modules/linear_model.html#logistic-regression\n",
+      "  n_iter_i = _check_optimize_result(\n"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Mittelwert der Kreuzvalidierung : 0.8721088435374149\n",
+      "Einzelwerte der Kreuzvalidierung : [0.88095238 0.86734694 0.86054422 0.88095238 0.8707483 ]\n"
+     ]
+    }
+   ],
+   "source": [
+    "# Aufteilen von df in X (Features) und target \n",
+    "df_ohne_target = df.drop(\"Attrition\", axis=1)\n",
+    "target = df[\"Attrition\"]\n",
+    "\n",
+    "# Erzeugen von Trainingsdaten und Testdaten\n",
+    "X_train, X_test, y_train, y_test = train_test_split(df_ohne_target, target, test_size=0.2, random_state=42)\n",
+    "\n",
+    "# Logistisches Regressionsmodell\n",
+    "logReg = LogisticRegression(max_iter=5000) # Erhöhung der Iterationen von 100 auf 500 => weniger Warnings\n",
+    "logReg.fit(X_train, y_train)\n",
+    "\n",
+    "y_prediction = logReg.predict(X_test)\n",
+    "print(y_prediction)\n",
+    "\n",
+    "accuracy = accuracy_score(y_test, y_prediction)\n",
+    "print(\"Genauigkeit des Modells:\", accuracy)\n",
+    "\n",
+    "# 5 Kreuzvalidierungen durchführen, dann MIttelwert ausgeben\n",
+    "cross_val = cross_val_score(logReg, df_ohne_target, target, cv=5)\n",
+    "cross_val_mean = np.mean(cross_val)\n",
+    "print(\"Mittelwert der Kreuzvalidierung :\", cross_val_mean)\n",
+    "print(\"Einzelwerte der Kreuzvalidierung :\", cross_val)"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "8f820f76-b1d1-4cc5-a6d2-9b14be44dec6",
+   "metadata": {},
+   "source": [
+    "Erläuterungen der Genauigkeit/Accuracy"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 77,
+   "id": "b5e670bc-65b7-4a0d-acf9-5785440ab57f",
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "      Vorhersage  Tatsächlich\n",
+      "1041           0            0\n",
+      "184            0            0\n",
+      "1222           0            1\n",
+      "67             0            0\n",
+      "220            0            0\n",
+      "...          ...          ...\n",
+      "567            0            0\n",
+      "560            0            0\n",
+      "945            0            0\n",
+      "522            0            0\n",
+      "651            0            0\n",
+      "\n",
+      "[294 rows x 2 columns]\n",
+      "Summe der Differenzen beträgt 34 von insg. 294 Fällen\n",
+      "Anteil richtiger Vorhersagen: 0.8843537414965986\n"
+     ]
+    }
+   ],
+   "source": [
+    "# DataFrame mit vorhersagten und tatsächlichen Daten erstellen\n",
+    "predictions_df = pd.DataFrame({'Vorhersage': y_prediction, 'Tatsächlich': y_test})\n",
+    "print(predictions_df)\n",
+    "\n",
+    "# Anzahl der Differenzen zwischen y_pred und y_test \n",
+    "differenzen = np.abs(y_prediction - y_test)\n",
+    "summe_differenzen = np.sum(differenzen)\n",
+    "gesamtzahl = len(predictions_df)\n",
+    "print(f\"Summe der Differenzen beträgt {summe_differenzen} von insg. {gesamtzahl} Fällen\")\n",
+    "\n",
+    "# Relative Anzahl der richtig vorhergesagten Fälle:\n",
+    "print(f\"Anteil richtiger Vorhersagen: {1-(summe_differenzen / len(predictions_df)) }\")\n"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "8b6d0c56-7fdf-4bb2-b2ac-70eb2c1caba0",
+   "metadata": {},
+   "source": [
+    "Fazit: Das Modell zeigt eine noch bessere Genauigkeit von 0,87 als der Mittelwert der Kreuzvalidierung von 0,86. Das bedeutet, dass das Modell der logistischen Regression in unserem Beispiel in ca. 87% der Fälle die richtigen Vorhersagen trifft."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 67,
+   "id": "8ef7126f-62a8-4c65-96c3-28e20c5c1562",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# ChatGPT Warnings-Unterdrückung bewirkt wenig... \n",
+    "# Sorry.\n",
+    "# \n",
+    "with warnings.catch_warnings():  \n",
+    "    warnings.filterwarnings(\"ignore\", category=DeprecationWarning)\n",
+    "    warnings.filterwarnings(\"ignore\", category=FutureWarning)\n",
+    "    warnings.filterwarnings(\"ignore\", category=Warning)"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "b034ef41-d5be-4b61-af54-2ae59f4ca31b",
+   "metadata": {},
+   "source": [
+    "BITTE NICHT WUNDERN: Je nach Prozesor kann der nachfolgenden Vorgang etwas dauern. Die Zahl der Iterationen wurde auf 5000 (statt 100) erhöht um damit weniger Iterations-Warnings zu produzieren (mehrere Seiten lang). Falls es zu lange dauert: \n",
+    "logReg = LogisticRegression(max_iter=5000) auf 500 einstellen. Und dann die Warnings genießen...\n"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 75,
+   "id": "127af544-8527-4b12-a5a3-4332431b3317",
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "    Anzahl Hauptkomponenten  Genauigkeit\n",
+      "0                        30     0.927891\n",
+      "1                        29     0.914286\n",
+      "2                        28     0.906122\n",
+      "3                        27     0.907483\n",
+      "4                        26     0.853741\n",
+      "5                        25     0.855102\n",
+      "6                        24     0.855102\n",
+      "7                        23     0.853741\n",
+      "8                        22     0.851020\n",
+      "9                        21     0.848980\n",
+      "10                       20     0.841497\n",
+      "11                       19     0.842177\n",
+      "12                       18     0.837415\n",
+      "13                       17     0.838095\n",
+      "14                       16     0.839456\n",
+      "15                       15     0.839456\n",
+      "16                       14     0.838095\n",
+      "17                       13     0.838776\n",
+      "18                       12     0.842177\n",
+      "19                       11     0.840816\n",
+      "20                       10     0.840136\n",
+      "21                        9     0.840136\n",
+      "22                        8     0.839456\n",
+      "23                        7     0.838776\n",
+      "24                        6     0.838776\n",
+      "25                        5     0.838776\n",
+      "26                        4     0.838776\n",
+      "27                        3     0.838776\n"
+     ]
+    },
+    {
+     "data": {
+      "image/png": "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\n",
+      "text/plain": [
+       "<Figure size 432x288 with 1 Axes>"
+      ]
+     },
+     "metadata": {
+      "needs_background": "light"
+     },
+     "output_type": "display_data"
+    }
+   ],
+   "source": [
+    "accuracy_dict = {}  # Dictionary für die Accuracy-Werte in Abhängigkeit von Anzahl der Hauptkomponenten\n",
+    "\n",
+    "# Dimensionsreduktion mit PCA von 30 bis hin zu nur 2 Hauptkomponenten: \n",
+    "for i in range(30, 2, -1):\n",
+    "   \n",
+    "    hauptKompAna = PCA(n_components=i) # Die Zahl der Hauptkomponenten wird schrittweise verringert\n",
+    "    hauptKompDaten = hauptKompAna.fit_transform(df)\n",
+    "\n",
+    "    # Aufteilen der reduzierten Daten in Trainings- und Testsets\n",
+    "    X_train, X_test, y_train, y_test = train_test_split(hauptKompDaten, target, test_size=0.2, random_state=42)\n",
+    "\n",
+    "    # Logistisches Regressionsmodell\n",
+    "    logReg = LogisticRegression(max_iter=5000)\n",
+    "    logReg.fit(X_train, y_train)\n",
+    "    \n",
+    "    # Vorhersagen für Testdaten machen\n",
+    "    y_prediction = logReg.predict(X_test)\n",
+    "\n",
+    "    # Hier werden direkt die MIttelwerte der Kreuzvalidierung ermittelt\n",
+    "    cv_scores = cross_val_score(logReg, hauptKompDaten, target, cv=5)\n",
+    "    accuracy_dict[i] = cv_scores.mean()  # Accuracy-Wert zum Dictionary hinzufügen (absteigende Reihenfolge!)\n",
+    "    \n",
+    "    \n",
+    "# Tabelle zur Darstellung der Anzahl der Hauptkomponenten und der entsprechenden Genauigkeit\n",
+    "table_data = {\"Anzahl Hauptkomponenten\": list(accuracy_dict.keys()),\n",
+    "              \"Genauigkeit\": list(accuracy_dict.values())}\n",
+    "table = pd.DataFrame(table_data)\n",
+    "print(table)\n",
+    "\n",
+    "# Scatter Plot der Accuracy-Werte\n",
+    "plt.scatter(accuracy_dict.keys(), accuracy_dict.values())\n",
+    "plt.xlabel(\"Anzahl Hauptkomponenten\")\n",
+    "plt.ylabel(\"Genauigkeit\")\n",
+    "plt.title(\"Genauigkeit in Abhängigkeit von den Hauptkomponenten\")\n",
+    "plt.show()\n"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "3fd54e5b-0274-42a3-9404-85e2d2c8cf73",
+   "metadata": {},
+   "source": [
+    "Fazit:\n",
+    "    Die Grafik zeigt, dass die Reduktion der Daten auf die Hauptkomponenten zunächst mit einem Verlust an Genauigkeit einhergeht (Graf von rechts nach links lesen!) und bei der Beschränkung auf ca. 17 Komponenten am schlechtesten ist. Bei weiterer Reduktion nimmt die Genauigkeit jedoch wieder zu und erreicht dann bei ca. 9 Komponenten eine Asymptote um den Wert 0,84. \n",
+    "    \n",
+    "Warum bei der Reduktion auf nur zwei Komponenten immer noch eine so hohe Güte (und das kreuzvalidiert) vorliegt, müsste man einen Statistiker fragen!\n",
+    "    "
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "19219e1f-2eb3-461b-8dd5-a449bca1b51b",
+   "metadata": {},
+   "source": [
+    "1.Welche Bewertungsmetrik betrachten Sie bei Ihrer Klassifikation? Begründen Sie?\n",
+    "\n",
+    "In dem gegebenen Code betrachten wir die Genauigkeit (accuracy) als Bewertungsmetrik für die Klassifikation. Die Genauigkeit misst den Anteil der korrekt vorhergesagten Labels (Attrition) im Verhältnis zur Gesamtanzahl der Vorhersagen (vgl. entsprechenden Code-Chunk oben)."
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "18602bdb-fb26-48e9-bf0b-18a4df589938",
+   "metadata": {},
+   "source": [
+    "2. Anzahl der Iterationen führt zu höherer Genauigkeit. Bei n=100 0,84, bei n=5000 0,88.\n",
+    "Die Anzahl der Hauptkomponenten wurde sukzessive reduziert, um den Einfluss auf die Vorhersagegenauigkeit des Modells zu ermitteln.\n",
+    "Ab ca. 9 Hauptkomponentnen bekommt man keine weitere Verbesserung (s. Aufgabe 1)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "45151cfe-e8ce-46c0-b4c6-d9f7ada3ae63",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "3. Wie viele Hauptkomponenten werden benötigt, um eine Vorhersagegenauigkeit von ca. 80 % zu erreichen?\n",
+    "zu erreichen?\n",
+    "Das ist eine Fangfrage: Die PCA ist immer besser als 80%. Aber warum???\n",
+    "\n",
+    "Auf wie viele Merkmale kann man den Datensatz reduzieren? Wie gut ist die Vorhersage des Modells\n",
+    "auf Basis der reduzierten Daten? Laut Berechnung auf 2 Hauptkomponenten. Das kann nicht stimmen!!!"
+   ]
+  }
+ ],
+ "metadata": {
+  "kernelspec": {
+   "display_name": "Python 3 (ipykernel)",
+   "language": "python",
+   "name": "python3"
+  },
+  "language_info": {
+   "codemirror_mode": {
+    "name": "ipython",
+    "version": 3
+   },
+   "file_extension": ".py",
+   "mimetype": "text/x-python",
+   "name": "python",
+   "nbconvert_exporter": "python",
+   "pygments_lexer": "ipython3",
+   "version": "3.9.12"
+  }
+ },
+ "nbformat": 4,
+ "nbformat_minor": 5
+}
